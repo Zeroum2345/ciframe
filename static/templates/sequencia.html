@@ -3,7 +3,8 @@
     <div class="col-sm-6 col-md-4 viewWindow-panel viewWindow-panel-C">
       <div class="viewWindow-panel-container">
         <h4 class="text-center">Aponte uma sequencia de acordes</h4>
-        <div class="acordes-container" ng-repeat='sequencia in Sequencia.sequenciasFamosas' ng-click="Sequencia.pesquisarPorSequencia(sequencia)">
+        <div class="acordes-container" ng-repeat="sequencia in Sequencia.sequenciasFamosas track by sequencia.id" ng-click="Sequencia.pesquisarPorSequencia(sequencia)">
+          <p class="text-center sequencia-rotulo">{{sequencia.rotulo}}</p>
           <df-hex acorde="{{acordeon.acorde}}" acorde-color="{{acordeon.cor}}" acorde-checked="Sequencia.temAcorde(acordeon)" ng-repeat="acordeon in sequencia.acordes"></df-hex>
         </div>
         <br style="clear: both;">
@@ -12,6 +13,27 @@
           <br>
           Encontrei essas músicas
         </button>
+
+        <hr>
+        <h4 class="text-center">Cadastrar nova sequência</h4>
+        <form ng-submit="Sequencia.criar()">
+          <div class="form-group">
+            <input type="text" class="form-control form-control-inverse" maxlength="80"
+              placeholder="Nome (opcional)" ng-model="Sequencia.novaSequencia.nome">
+          </div>
+          <div class="form-group">
+            <input type="text" class="form-control form-control-inverse"
+              placeholder="Acordes, ex.: C, A7, Dm, G7" ng-model="Sequencia.novaSequencia.acordes">
+          </div>
+          <button type="submit" class="btn btn-default" ng-disabled="Sequencia.criando">
+            Cadastrar
+          </button>
+        </form>
+        <p class="text-danger" ng-if="Sequencia.erroCadastro">{{Sequencia.erroCadastro}}</p>
+        <p class="text-success" ng-if="Sequencia.avisoCadastro">{{Sequencia.avisoCadastro}}</p>
+        <p class="text-muted small">
+          A busca encontra músicas que usem somente os acordes da sequência, na ordem informada.
+        </p>
       </div>
     </div>
     <div id="results" class="col-sm-6 col-md-8 viewWindow-panel viewWindow-panel-D">
@@ -39,8 +61,7 @@
 
         <div class="row row-in">
           <div class="col-sm-6 col-lg-4"
-            ng-repeat="music in Sequencia.musics | orderBy:'-popularidade'"
-            ng-hide="music.diferenca.length">
+            ng-repeat="music in Sequencia.musics | orderBy:'-popularidade'">
 
               <div class="music-card" ng-click="Sequencia.goToLirics(music)">
                 <div class="row row-in">
@@ -56,6 +77,12 @@
               </div>
 
           </div>
+        </div>
+
+        <div class="text-center" ng-if="Sequencia.temMais">
+          <button class="btn btn-default" ng-click="Sequencia.carregarMais()" ng-disabled="Sequencia.carregandoMais">
+            Carregar mais
+          </button>
         </div>
 
     </div>

@@ -1,40 +1,9 @@
 angular.module('deciframeApp').controller('SequenciaController', function($http, $window, ngProgressFactory, $anchorScroll, $location, GENEROS) {
-  var sequencia1 = {
-    'index': 1,
-    'acordes': [
-      { 'acorde': 'Bm', 'cor': '#2E1C74' },
-      { 'acorde': 'G',  'cor': '#2E1C74' },
-      { 'acorde': 'D',  'cor': '#2E1C74' },
-      { 'acorde': 'A',  'cor': '#2E1C74' }
-  ]};
-  var sequencia2 = {
-    'index': 1,
-    'acordes': [
-      { 'acorde': 'C',  'cor': '#2E1C74' },
-      { 'acorde': 'G',  'cor': '#2E1C74' },
-      { 'acorde': 'Am', 'cor': '#2E1C74' },
-      { 'acorde': 'F',  'cor': '#2E1C74' }
-  ]};
-  var sequencia3 = {
-    'index': 1,
-    'acordes': [
-      { 'acorde': 'Gm', 'cor': '#2E1C74' },
-      { 'acorde': 'F',  'cor': '#2E1C74' }
-  ]};
-  var sequencia4 = {
-    'index': 1,
-    'acordes': [
-      { 'acorde': 'C',  'cor': '#2E1C74' },
-      { 'acorde': 'C7', 'cor': '#2E1C74' },
-      { 'acorde': 'F',  'cor': '#2E1C74' },
-      { 'acorde': 'Fm', 'cor': '#2E1C74' }
-  ]};
+  var COR = '#2E1C74';
+  var TAM_PAGINA = 100;
+
   var vm = this;
   vm.sequenciasFamosas = [];
-  vm.sequenciasFamosas.push(sequencia1);
-  vm.sequenciasFamosas.push(sequencia2);
-  vm.sequenciasFamosas.push(sequencia3);
-  vm.sequenciasFamosas.push(sequencia4);
   vm.minhaSequencia = {};
   vm.isSearching = false;
   vm.showSearchResultsCount = false;
@@ -44,6 +13,43 @@ angular.module('deciframeApp').controller('SequenciaController', function($http,
   vm.meuGenero = "";
   vm.progressbar = ngProgressFactory.createInstance();
 
+  vm.pagina = 1;
+  vm.temMais = false;
+  vm.carregandoMais = false;
+
+  vm.novaSequencia = { nome: '', acordes: '' };
+  vm.criando = false;
+  vm.erroCadastro = '';
+  vm.avisoCadastro = '';
+
+  var montarSequencia = function(registro) {
+    var acordes = [];
+    for (var i = 0; i < registro.acordes.length; i++) {
+      acordes.push({ 'acorde': registro.acordes[i], 'cor': COR });
+    }
+    return {
+      'id': registro.id,
+      'nome': registro.nome,
+      'rotulo': registro.nome || registro.acordes.join(' - '),
+      'acordes': acordes
+    };
+  };
+
+  vm.carregarSequencias = function() {
+    $http.get('sequencias')
+      .success(function(data) {
+        vm.sequenciasFamosas = [];
+        for (var i = 0; i < data.length; i++) {
+          vm.sequenciasFamosas.push(montarSequencia(data[i]));
+        }
+      })
+      .error(function() {
+        vm.erroCadastro = 'Não foi possível carregar o catálogo de sequências.';
+      });
+  };
+
+  vm.carregarSequencias();
+
   vm.temAcorde = function(acorde) {
     if (vm.minhaSequencia.acordes) {
       return (vm.minhaSequencia.acordes.indexOf(acorde) > -1);
@@ -52,35 +58,36 @@ angular.module('deciframeApp').controller('SequenciaController', function($http,
     }
   }
 
-  var createChordsString = function(chords) {
-    var str = "";
-    for (var i = 0; i < chords.length; i++) {
-      str = str.concat(chords[i].acorde, ',');
+  var criarBusca = function(pagina) {
+    var searchString = "similares?sequencia_id=" + vm.minhaSequencia.id + "&pagina=" + pagina;
+    if (vm.meuGenero !== "" && vm.meuGenero !== null) {
+      searchString += "&generos=" + encodeURIComponent(vm.meuGenero);
     }
-    return str.substring(0, str.length-1);
-  }
+    return searchString;
+  };
 
   vm.pesquisarPorSequencia = function(sequencia) {
     if (sequencia) {
       vm.minhaSequencia = sequencia;
     }
+    if (vm.minhaSequencia.id === undefined) {
+      return;
+    }
     vm.progressbar.start();
     vm.esfigeSpeech = "Procurando músicas com base na sequencia...";
     vm.isSearching = true;
     vm.musics = [];
+    vm.pagina = 1;
+    vm.temMais = false;
 
-    var apiUrl = "";
-    var searchString = "similares?sequencia=".concat(createChordsString(vm.minhaSequencia.acordes));
-    if (vm.meuGenero !== "" && vm.meuGenero !== null) {
-      searchString += "&generos="+vm.meuGenero;
-    }
-    $http.get(apiUrl.concat(searchString))
+    $http.get(criarBusca(1))
       .success(function(data) {
         vm.progressbar.complete();
         vm.esfigeSpeech = "Encontrei essas músicas";
         vm.isSearching = false;
-        vm.showSearchResultsCount = true;
+        vm.showSearchResultsCount = data.length > 0;
         vm.musics = data;
+        vm.temMais = data.length === TAM_PAGINA;
       })
       .error(function(data) {
         vm.esfigeSpeech = "Ops! Algo errado.";
@@ -89,9 +96,77 @@ angular.module('deciframeApp').controller('SequenciaController', function($http,
       });
   }
 
+  vm.carregarMais = function() {
+    if (vm.carregandoMais || !vm.temMais || vm.minhaSequencia.id === undefined) {
+      return;
+    }
+    vm.carregandoMais = true;
+    var proxima = vm.pagina + 1;
+
+    $http.get(criarBusca(proxima))
+      .success(function(data) {
+        vm.musics = vm.musics.concat(data);
+        vm.pagina = proxima;
+        vm.temMais = data.length === TAM_PAGINA;
+        vm.carregandoMais = false;
+      })
+      .error(function() {
+        vm.carregandoMais = false;
+      });
+  }
+
+  vm.criar = function() {
+    if (!vm.novaSequencia.acordes.replace(/,/g, ' ').trim()) {
+      vm.erroCadastro = 'Informe pelo menos um acorde.';
+      return;
+    }
+
+    vm.criando = true;
+    vm.erroCadastro = '';
+    vm.avisoCadastro = '';
+
+    var corpo = {
+      nome: vm.novaSequencia.nome,
+      acordes: vm.novaSequencia.acordes
+    };
+
+    $http.post('sequencias', corpo)
+      .success(function(registro, status) {
+        vm.criando = false;
+        var sequencia = montarSequencia(registro);
+
+        var existe = false;
+        for (var i = 0; i < vm.sequenciasFamosas.length; i++) {
+          if (vm.sequenciasFamosas[i].id === sequencia.id) {
+            existe = true;
+            break;
+          }
+        }
+        if (!existe) {
+          vm.sequenciasFamosas.push(sequencia);
+        }
+
+        vm.novaSequencia = { nome: '', acordes: '' };
+        vm.avisoCadastro = (status === 200)
+          ? 'Essa sequência já existia; usei a existente.'
+          : 'Sequência cadastrada. ' + registro.total_musicas + ' música(s) encontrada(s).';
+
+        vm.pesquisarPorSequencia(sequencia);
+      })
+      .error(function(data) {
+        vm.criando = false;
+        vm.erroCadastro = (data && data.erro)
+          ? data.erro
+          : 'Não foi possível cadastrar a sequência.';
+      });
+  }
+
   vm.limparPesquisa = function() {
     vm.minhaSequencia = {};
     vm.musics = [];
+    vm.pagina = 1;
+    vm.temMais = false;
+    vm.showSearchResultsCount = false;
   }
 
   vm.goToLirics = function(music) {

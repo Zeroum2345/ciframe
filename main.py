@@ -1,12 +1,19 @@
 # coding: utf-8
 import json
+import os
 from flask import Flask, request
 import sys
 from musica import *
 from collections import OrderedDict
 import unicodedata
+from sequence_store import SequenceStore, ValidacaoError
 
 app = Flask(__name__)
+
+DB_PATH = os.environ.get('DECIFRAME_DB_PATH',
+        os.path.join('var', 'deciframe.db'))
+sequence_store = SequenceStore(DB_PATH)
+sequence_store.init_db()
 
 def limpa_cifra(raw_cifra):
     cifra = []
@@ -37,12 +44,6 @@ TAM_PAGINA = 100
 genero_musicas = {}
 generos = set()
 acordes = set()
-sequencias = {'BmGDA' : 0,
-        'CGAmF' : 1,
-        'EmG' : 2,
-        'CA7DmG7' : 3,
-        'GmF' : 4,
-        'CC7FFm' : 5}
 
 musicas_dict = {}
 
@@ -167,11 +168,35 @@ def get_acordes():
 def get_musica(m_id):
     return json.dumps(musicas[m_id].__dict__)
 
+@app.route('/sequencias')
+def get_sequencias():
+    return json.dumps(sequence_store.listar())
+
+@app.route('/sequencias', methods=['POST'])
+def criar_sequencia():
+    dados = request.get_json(force=True, silent=True)
+    if not isinstance(dados, dict):
+        return json.dumps({'erro': 'corpo JSON inválido'}), 400
+
+    try:
+        acordes_seq = dados.get('acordes')
+        if isinstance(acordes_seq, str):
+            acordes_seq = parse_acordes(acordes_seq)
+        registro, criado = sequence_store.criar(dados.get('nome'), acordes_seq)
+    except ValidacaoError as erro:
+        return json.dumps({'erro': str(erro)}), 400
+
+    resposta = dict(registro)
+    resposta['total_musicas'] = total_musicas_por_sequencia(registro['acordes'])
+
+    return json.dumps(resposta), 201 if criado else 200
+
 @app.route('/similares')
 def get_similares():
     # tratando request
     acordes_tag = request.args.get('acordes')
     id_musica_tag = request.args.get('id_unico_musica')
+    sequencia_id_tag = request.args.get('sequencia_id')
     sequencia_tag = request.args.get('sequencia')
     pagina_tag = request.args.get('pagina','1')
 
@@ -187,26 +212,70 @@ def get_similares():
     elif id_musica_tag:
         musica = musicas[id_musica_tag]
         acordes = musica.acordes
-    elif sequencia_tag:
-        acordes = sequencia_tag.replace(',','')
-        similares = []
-
-        if acordes in sequencias:
-            id_seq = sequencias[acordes]
-            similares = get_pagina(get_similares_por_sequencia(id_seq, generos_key), pagina_tag)
-        return json.dumps(similares)
+    elif sequencia_id_tag or sequencia_tag:
+        acordes_seq = acordes_da_sequencia(sequencia_id_tag, sequencia_tag)
+        if acordes_seq is None:
+            return json.dumps([])
+        similares = get_similares_por_sequencia(acordes_seq, generos_key)
+        return json.dumps(get_pagina(similares, pagina_tag))
 
     similares = get_similares(acordes, generos_key, id_musica_tag)
 
     return json.dumps(get_pagina(similares, pagina_tag))
 
-def get_similares_por_sequencia(id_seq, generos_key):
+def acordes_da_sequencia(sequencia_id_tag, sequencia_tag):
+    """Resolve o parâmetro de busca em uma lista de acordes, ou None."""
+    if sequencia_id_tag:
+        try:
+            seq_id = int(sequencia_id_tag)
+        except (TypeError, ValueError):
+            return None
+        registro = sequence_store.buscar(seq_id)
+        if registro is None:
+            return None
+        return registro['acordes']
+
+    registro = sequence_store.buscar_legado(sequencia_tag)
+    if registro is not None:
+        return registro['acordes']
+
+    acordes_seq = parse_acordes(sequencia_tag)
+    return acordes_seq if acordes_seq else None
+
+def parse_acordes(valor):
+    """Aceita acordes separados por vírgula e/ou espaço."""
+    return [token for token in valor.replace(',', ' ').split() if token]
+
+def casa_sequencia(acordes_seq, musica):
+    """A música usa somente acordes da sequência e a contém como fatia contígua."""
+    if not acordes_seq:
+        return False
+
+    if not set(musica.acordes) <= set(acordes_seq):
+        return False
+
+    n = len(acordes_seq)
+    cifra = musica.cifra
+    if n > len(cifra):
+        return False
+
+    for i in range(len(cifra) - n + 1):
+        if cifra[i:i+n] == acordes_seq:
+            return True
+
+    return False
+
+def total_musicas_por_sequencia(acordes_seq):
+    return sum(1 for musica in musicas.values()
+            if casa_sequencia(acordes_seq, musica))
+
+def get_similares_por_sequencia(acordes_seq, generos_key):
     # filtra para melhor desempenho
     collection = apply_filtro(musicas.values(), generos_key)
 
     similares = []
     for musica in collection:
-        if str(id_seq) in musica.seqs_famosas:
+        if casa_sequencia(acordes_seq, musica):
             similar = {
                 'id_unico_musica' : musica.id_unico_musica,
                 'id_artista' : musica.id_artista,

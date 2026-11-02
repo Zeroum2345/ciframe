@@ -6,9 +6,9 @@ similar songs. Full description: [README.md](README.md).
 
 ## Stack
 
-- Backend: Python 3.9, Flask 3.1, gunicorn. Single file (`main.py`) that
-  loads `data/top/dataset_final.csv` into memory once at startup — there is
-  no database.
+- Backend: Python 3.9, Flask 3.1, gunicorn. `main.py` loads
+  `data/top/dataset_final.csv` into memory once at startup; the sequences
+  catalog is stored in SQLite (`sequence_store.py`, `var/deciframe.db`).
 - Frontend: AngularJS 1.4.9 + jQuery, loaded from CDN in `static/index.html`,
   no build step. Legacy, and there's no plan to modernize the stack itself —
   but touching it is no longer off-limits when a task needs it; see
@@ -21,8 +21,12 @@ Docker (matches how the app actually ships):
 
 ```
 docker build -t ciframe .
-docker run -p 8080:8080 ciframe
+docker run -p 8080:8080 -v deciframe-data:/app/var ciframe
 ```
+
+The named volume is where the sequences catalog lives; without it, changes
+survive `docker restart` but not `docker rm` or a rebuild. Never mount it over
+`/app/data` — that directory holds the CSV the app reads.
 
 Or a plain virtualenv:
 
@@ -43,5 +47,6 @@ Done when this returns a JSON array of genre names (e.g. `["Rock", "Samba", ...]
 ## Gotchas
 
 - Editing `data/top/*.csv` requires a restart: it's read once at import time, not per-request.
+- The sequences catalog lives in `var/deciframe.db` (override with `DECIFRAME_DB_PATH`). The schema and the six original sequences are seeded idempotently at startup.
 - Every endpoint returns `json.dumps(...)` as a plain string, not `jsonify` — responses come back `Content-Type: text/html`. This is intentional legacy behavior; changing it is a real API change, not a cleanup.
 - Check `docs/adr/` before changing the deploy setup — it has a documented reason for its current state.
