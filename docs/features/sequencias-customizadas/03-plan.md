@@ -30,6 +30,27 @@ Contexto, decisões e design técnico: [03-design.md](03-design.md).
       `README.md`/`AGENTS.md`. Persistência entre processos validada; Docker não estava
       disponível no ambiente (ver `04-test-report.md`).
 
+## Revisão — cadastro por paleta de acordes
+
+A primeira versão usava um campo de texto para os acordes; esta revisão troca por
+clique nos botões, como em `#/poracordes`. Design: [03-design.md](03-design.md).
+
+15. [x] Extrair a paleta de `acordes.js` para a constante `PALETA_ACORDES` em `app.js` e
+      consumi-la em `AcordesController`, sem mudar o comportamento de `#/poracordes`.
+16. [x] Em `SequenciaController`, trocar a string de `novaSequencia.acordes` por uma lista
+      ordenada de `{acorde, cor}`; adicionar `adicionarAcorde`, `removerAcorde(index)`,
+      `limparSequencia`, contador e limite de 32.
+17. [x] Em `sequencia.html`, remover o input de acordes e renderizar a paleta e a sequência
+      em construção com `df-hex` (`track by $index`); desabilitar `Cadastrar` com zero
+      acordes; enviar `acordes` como lista no `POST`.
+18. [x] Dar rolagem própria à lista de sequências salvas (`max-height` +
+      `overflow-y:auto`) para a paleta continuar acessível com o catálogo cheio.
+19. [x] Verificar `#/poracordes` (paleta, cores, toggle) e o fluxo de `#/porsequencia` no
+      browser: montar `C, G, Am` por cliques → 201 (ou 200 se já existir) com
+      `total_musicas=28`, remover/limpar, limite de 32 e `node --check`.
+20. [x] Atualizar `04-test-report.md` e `02-proposal.md` (que ainda descrevem o campo de
+      texto) para o cadastro por cliques.
+
 ## Arquivos afetados
 
 | Arquivo | Mudança |
@@ -41,8 +62,12 @@ Contexto, decisões e design técnico: [03-design.md](03-design.md).
 | `main.py` (novas rotas) | `GET /sequencias`, `POST /sequencias` |
 | `static/assets/js/controllers/sequencia.js:2-37` | catálogo dinâmico |
 | `static/assets/js/controllers/sequencia.js:63-90` | busca por `id`, paginação, `criar()` |
+| `static/assets/js/app.js` | constante `PALETA_ACORDES` compartilhada |
+| `static/assets/js/controllers/acordes.js:2-53` | consome `PALETA_ACORDES` (sem mudança visual) |
 | `static/templates/sequencia.html:6-14` | lista dinâmica + formulário de cadastro |
+| `static/templates/sequencia.html:18-31` | paleta + sequência em construção no lugar do input |
 | `static/templates/sequencia.html:40-58` | "carregar mais", remover `ng-hide` |
+| `static/assets/css/app.css` | rolagem da lista de sequências salvas |
 | `Dockerfile:8-12` | `VOLUME ["/app/var"]` |
 | `.gitignore`, `.dockerignore` | ignorar `var/` |
 | `README.md:13-17`, `AGENTS.md:11-13` | comando com `-v`, nota de banco/persistência |
@@ -62,6 +87,9 @@ Contexto, decisões e design técnico: [03-design.md](03-design.md).
 | POST anônimo polui o catálogo | catálogo crescendo sem controle | limites de tamanho + teto de 500 |
 | Diretório do banco não gravável | `sqlite3.OperationalError` no startup | criar o diretório e falhar com mensagem clara |
 | Backup copia `.db` sem WAL | banco restaurado incompleto | usar `.backup` do SQLite ou parar o container antes de copiar |
+| Paleta não cobre todos os tokens (`m7`, `9`, `sus`, barra) | usuário não encontra o acorde desejado | manter API/`?sequencia=` como escape e documentar a limitação |
+| Refatoração da paleta quebra `#/poracordes` | regressão visual na grade/toggle | consumir a mesma constante e verificar a página no browser |
+| Paleta + catálogo deixam a coluna esquerda longa | cadastro inalcançável com 500 sequências | rolagem própria na lista de salvas |
 
 ## Definição de pronto
 
@@ -77,5 +105,8 @@ Contexto, decisões e design técnico: [03-design.md](03-design.md).
       estava disponível (ver `04-test-report.md`).
 - [x] Endpoints novos e alterados usam `json.dumps` (Content-Type `text/html`).
 - [x] `#/porsequencia` não tem sequências hardcoded, permite cadastrar e paginar.
+- [x] O cadastro é feito só por cliques nos acordes, sem campo de texto de acordes.
+- [x] `#/poracordes` continua idêntico (paleta, cores e toggle) após extrair a constante.
+- [x] `POST /sequencias` continua aceitando lista e string depois da mudança do formulário.
 - [x] Nenhuma dependência nova em `requirements.txt`.
 - [x] `04-test-report.md` preenchido com a cobertura e o resultado da regressão.

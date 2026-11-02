@@ -1,6 +1,7 @@
-angular.module('deciframeApp').controller('SequenciaController', function($http, $window, ngProgressFactory, $anchorScroll, $location, GENEROS) {
+angular.module('deciframeApp').controller('SequenciaController', function($http, $window, ngProgressFactory, $anchorScroll, $location, GENEROS, PALETA_ACORDES) {
   var COR = '#2E1C74';
   var TAM_PAGINA = 100;
+  var MAX_ACORDES = 32;
 
   var vm = this;
   vm.sequenciasFamosas = [];
@@ -17,10 +18,13 @@ angular.module('deciframeApp').controller('SequenciaController', function($http,
   vm.temMais = false;
   vm.carregandoMais = false;
 
-  vm.novaSequencia = { nome: '', acordes: '' };
+  vm.paleta = PALETA_ACORDES;
+  vm.maxAcordes = MAX_ACORDES;
+  vm.novaSequencia = { nome: '', acordes: [] };
   vm.criando = false;
   vm.erroCadastro = '';
   vm.avisoCadastro = '';
+  vm.avisoLimite = '';
 
   var montarSequencia = function(registro) {
     var acordes = [];
@@ -57,6 +61,25 @@ angular.module('deciframeApp').controller('SequenciaController', function($http,
       return false;
     }
   }
+
+  vm.adicionarAcorde = function(acordeon) {
+    if (vm.novaSequencia.acordes.length >= MAX_ACORDES) {
+      vm.avisoLimite = 'Limite de ' + MAX_ACORDES + ' acordes por sequência.';
+      return;
+    }
+    vm.avisoLimite = '';
+    vm.novaSequencia.acordes.push({ 'acorde': acordeon.acorde, 'cor': acordeon.cor });
+  };
+
+  vm.removerAcorde = function(index) {
+    vm.novaSequencia.acordes.splice(index, 1);
+    vm.avisoLimite = '';
+  };
+
+  vm.limparSequencia = function() {
+    vm.novaSequencia.acordes = [];
+    vm.avisoLimite = '';
+  };
 
   var criarBusca = function(pagina) {
     var searchString = "similares?sequencia_id=" + vm.minhaSequencia.id + "&pagina=" + pagina;
@@ -116,18 +139,24 @@ angular.module('deciframeApp').controller('SequenciaController', function($http,
   }
 
   vm.criar = function() {
-    if (!vm.novaSequencia.acordes.replace(/,/g, ' ').trim()) {
-      vm.erroCadastro = 'Informe pelo menos um acorde.';
+    if (!vm.novaSequencia.acordes.length) {
+      vm.erroCadastro = 'Escolha pelo menos um acorde.';
       return;
     }
 
     vm.criando = true;
     vm.erroCadastro = '';
     vm.avisoCadastro = '';
+    vm.avisoLimite = '';
+
+    var acordes = [];
+    for (var i = 0; i < vm.novaSequencia.acordes.length; i++) {
+      acordes.push(vm.novaSequencia.acordes[i].acorde);
+    }
 
     var corpo = {
       nome: vm.novaSequencia.nome,
-      acordes: vm.novaSequencia.acordes
+      acordes: acordes
     };
 
     $http.post('sequencias', corpo)
@@ -146,7 +175,7 @@ angular.module('deciframeApp').controller('SequenciaController', function($http,
           vm.sequenciasFamosas.push(sequencia);
         }
 
-        vm.novaSequencia = { nome: '', acordes: '' };
+        vm.novaSequencia = { nome: '', acordes: [] };
         vm.avisoCadastro = (status === 200)
           ? 'Essa sequência já existia; usei a existente.'
           : 'Sequência cadastrada. ' + registro.total_musicas + ' música(s) encontrada(s).';

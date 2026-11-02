@@ -163,8 +163,10 @@ Em `#/porsequencia`:
   mantendo a diretiva `df-hex` intacta. `rotulo` é o nome quando existe, senão os
   acordes unidos por `" - "`;
 - a busca passa a enviar `sequencia_id` em vez da string de acordes;
-- um formulário (nome opcional + campo de acordes separados por vírgula/espaço) faz
-  `POST /sequencias` e, no sucesso, insere a sequência no catálogo e já busca por ela;
+- um formulário (nome opcional + paleta de 36 acordes clicáveis, a mesma de
+  `#/poracordes`) monta a sequência na ordem dos cliques e faz `POST /sequencias`
+  enviando `acordes` como lista; no sucesso, insere a sequência no catálogo e já
+  busca por ela;
 - paginação: `pagina` + botão "carregar mais" concatenando páginas, resolvendo o
   truncamento em 100 de `BmGDA` (199) e `CGAmF` (296);
 - remove-se `ng-hide="music.diferenca.length"`, que é sempre falso (resultado de

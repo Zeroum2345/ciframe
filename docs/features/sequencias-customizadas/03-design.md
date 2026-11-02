@@ -30,6 +30,8 @@ Checklist de execução: [03-plan.md](03-plan.md).
   originais.
 - Catálogo persistido em banco e sobrevivente a reinício do container.
 - `#/porsequencia` lê o catálogo do backend (não hardcoded) e permite cadastrar.
+- Cadastro por clique: a sequência é montada clicando nos mesmos botões hexagonais de
+  `#/poracordes`; não há campo de texto para acordes (o nome segue opcional).
 - Compatibilidade: `?sequencia=BmGDA` continua funcionando; `?sequencia=` passa a aceitar
   string arbitrária; `?sequencia_id=` é o novo seletor estável.
 - Endpoints continuam retornando `json.dumps(...)`, não `jsonify`.
@@ -105,6 +107,54 @@ Arquivo em `var/deciframe.db`, `VOLUME /app/var` e volume nomeado no `docker run
   criar outro; 201 só na criação.
 - Mudança intencional: `?sequencia=Bm G D A` passa de 0 para 199 resultados.
 
+### 6. Cadastro por paleta de acordes (revisão)
+
+A primeira versão do formulário pedia os acordes em um campo de texto
+(`"Acordes, ex.: C, A7, Dm, G7"`). Isso destoava do resto da aplicação: em
+`#/poracordes` e no catálogo de sequências, acorde é um botão hexagonal clicável. O
+texto livre também abria espaço para erro de digitação e para tokens sem
+correspondência visual (inclusive `["C,G"]`, que vira um único acorde e nunca casa).
+
+O cadastro passa a ser feito por **clique**, com a mesma paleta de `#/poracordes`:
+36 acordes em 7 grupos (C, D, E, F, G, A, B), cobrindo maiores, menores e sétimas nas
+12 raízes (com sustenidos), com as mesmas cores. A paleta sai de `acordes.js` e vira a
+constante `PALETA_ACORDES` em `app.js`, ao lado de `GENEROS`, consumida pelos dois
+controllers — uma fonte só, sem duplicar os 36 acordes.
+
+Regras de interação:
+
+- clicar na paleta **acrescenta** o acorde ao fim da sequência; ordem e repetição são
+  semânticas, então o clique não alterna como em `#/poracordes`;
+- a sequência em construção aparece como uma fileira de hexágonos na ordem escolhida;
+  clicar em um hexágono dessa fileira remove aquela ocorrência;
+- a fileira usa `ng-repeat` com `track by $index`, porque a mesma lista pode conter o
+  mesmo acorde mais de uma vez;
+- `Limpar` zera a seleção e o contador mostra `n/32` (limite do store); com 32
+  acordes, novos cliques são ignorados com aviso;
+- `Cadastrar` fica desabilitado com zero acordes ou durante o envio;
+- `nome` continua um campo de texto opcional (é metadado, não a sequência).
+
+O formulário passa a enviar `acordes` como **lista** (`["C","G","Am"]`), que é o
+formato nativo do store; a API continua aceitando string para compatibilidade. Não há
+mudança de backend, schema ou contrato de resposta.
+
+Layout: a lista de sequências salvas ganha rolagem própria (`max-height` +
+`overflow-y:auto`) para a paleta continuar alcançável quando o catálogo se aproxima do
+teto de 500; o bloco de cadastro permanece abaixo dela, na mesma coluna.
+
+Trade-offs aceitos:
+
+- a paleta é curada: só maiores, menores e sétimas nas 12 raízes. Sequências com
+  `Am7`, `9`, `sus`, acordes com barra etc. não são montáveis na UI; a API e
+  `?sequencia=` continuam aceitando qualquer token (escape hatch documentado);
+- não há inserção no meio: para corrigir a ordem, remova a ocorrência e recrie a cauda;
+- `#/poracordes` não muda de comportamento — só a origem dos dados da paleta.
+
+Alternativas descartadas: manter o texto livre (inconsistente e sujeito a erro); montar
+a paleta a partir de `GET /acordes` (6.653 tokens, inviável como grade e visualmente
+diferente); paleta + campo de acorde avulso (reintroduz o texto que esta revisão
+remove).
+
 ## Design Técnico
 
 ### 1. Componentes Principais
@@ -173,9 +223,9 @@ POST /sequencias ->  {"nome": "Pop", "acordes": ["C","G","Am"]}
 | `GET /similares` | `sequencia_id`, `sequencia`, `generos`, `pagina` | músicas paginadas (100) |
 | `sequencia_store` | caminho do arquivo | conexão por operação, WAL, `timeout=5` |
 
-Fluxo do cadastro: corpo → split/`strip` → validação (1–32 acordes, 1–24 chars cada,
-nome ≤ 80) → `chords_key` → `INSERT` ou retorno do existente → `total_musicas` via
-matcher → resposta.
+Fluxo do cadastro: cliques na paleta montam uma lista ordenada → `POST` com `acordes`
+como lista → `strip`/validação (1–32 acordes, 1–24 chars cada, nome ≤ 80) → `chords_key`
+→ `INSERT` ou retorno do existente → `total_musicas` via matcher → resposta.
 
 Fluxo da busca: parâmetro → acordes (catálogo, legado ou ad-hoc) → `apply_filtro` por
 gênero → `casa_sequencia` → `get_pagina`.
@@ -191,8 +241,11 @@ Criados:
 Modificados:
 
 - `main.py`
+- `static/assets/js/app.js` (constante `PALETA_ACORDES` compartilhada)
+- `static/assets/js/controllers/acordes.js` (passa a consumir a constante)
 - `static/assets/js/controllers/sequencia.js`
 - `static/templates/sequencia.html`
+- `static/assets/css/app.css` (rolagem da lista de sequências salvas)
 - `Dockerfile`, `.gitignore`, `.dockerignore`
 - `README.md`, `AGENTS.md`
 
@@ -200,8 +253,8 @@ Sem alteração: `musica.py`, `requirements.txt`, `data/top/dataset_final.csv`.
 
 ## Plano de Implementação
 
-Estimativas de esforço (não há datas neste projeto). Total ≈ 7–9 h. O checklist
-executável está em [03-plan.md](03-plan.md).
+Estimativas de esforço (não há datas neste projeto). Total ≈ 8–11 h (inclui a revisão do
+cadastro por paleta). O checklist executável está em [03-plan.md](03-plan.md).
 
 1. **Fase 1 — Persistência e matching (≈ 3 h)**
    - Entrega: `sequence_store.py` (schema, seed, CRUD, validação) e matching por acordes
@@ -212,6 +265,12 @@ executável está em [03-plan.md](03-plan.md).
    - Entrega: `GET/POST /sequencias`, `sequencia_id` em `/similares` e `#/porsequencia`
      lendo o catálogo, cadastrando e paginando.
    - Saída da fase: cadastro pela UI aparece no catálogo e a busca funciona.
+
+2b. **Fase 2b — cadastro por paleta (revisão, ≈ 1–2 h)**
+   - Entrega: `PALETA_ACORDES` compartilhada em `app.js`, formulário sem campo de texto
+     de acordes, seleção por clique com remoção/limpeza e lista de salvas com rolagem.
+   - Saída da fase: sequência montada só por cliques, `POST` em lista e `#/poracordes`
+     inalterado.
 
 3. **Fase 3 — Deploy, testes e documentação (≈ 2 h)**
    - Entrega: volume no Docker, `.gitignore`/`.dockerignore`, testes e README/AGENTS.
@@ -237,8 +296,9 @@ executável está em [03-plan.md](03-plan.md).
 - Persistência: gravar, reiniciar o processo, reler.
 - Docker: `import sqlite3` na imagem base; `docker restart` mantém; `docker rm` + volume
   mantém; sem volume perde (comportamento esperado e documentado).
-- Manual (sem infra de teste JS): catálogo dinâmico, cadastro, duplicata, "carregar
-  mais", filtro de gênero — mais o gif entregável.
+- Manual (sem infra de teste JS): catálogo dinâmico, cadastro **por cliques na paleta**
+  (montar, remover, limpar, limite de 32), duplicata, "carregar mais", filtro de gênero,
+  além da regressão visual de `#/poracordes` — mais o gif entregável.
 
 Runner: `python -m unittest discover -s tests` (stdlib, sem dependência nova).
 
@@ -261,6 +321,11 @@ diretório do banco não for gravável.
 - Regra estrita: muitas sequências novas retornam zero músicas.
 - Busca O(n) sobre 3,5 milhões de tokens por requisição (~40 ms).
 - Sem normalização de acordes (enharmônicos, barras, parênteses).
+- A paleta da UI expõe 36 acordes curados (maiores, menores e sétimas nas 12 raízes com
+  sustenidos); tokens como `Am7`, `9`, `sus` e acordes com barra só entram via API ou
+  `?sequencia=`.
+- A sequência é montada só no fim: não há inserção no meio (remova a ocorrência e
+  recrie a cauda).
 - Um escritor por vez; schema evoluído manualmente.
 
 ## Dependências
@@ -275,7 +340,7 @@ diretório do banco não for gravável.
 
 - Cadastro anônimo, sem autenticação, sessão ou CSRF — decisão do produto; o deploy é
   local (ADR 0001), o que limita a exposição.
-- `Access-Control-Allow-Origin: *` (`main.py:274-277`) permite POST de qualquer origem;
+- `Access-Control-Allow-Origin: *` (`main.py:343-345`) permite POST de qualquer origem;
   o impacto é poluição do catálogo, não vazamento de dados.
 - Mitigações: validação server-side, limites de tamanho, teto de 500 sequências e SQL
   sempre parametrizado.

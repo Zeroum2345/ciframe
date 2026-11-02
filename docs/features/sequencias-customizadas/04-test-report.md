@@ -62,9 +62,11 @@ exercitada com gunicorn real: `GET /sequencias`, `POST` 201, busca por
 `sequencia_id`, paginação e reinício do processo com o registro preservado. O fluxo
 de `#/porsequencia` também foi exercitado manualmente no browser: as 6 originais
 aparecem com rótulo e acordes; `BmGDA` carrega 100 cartões e chega a 199 com
-"Carregar mais"; cadastrar `G, D, Em, C` como "Teste UI" devolveu 201 e 252 músicas;
-repetir os mesmos acordes devolveu 200, manteve o nome existente e não duplicou o
-catálogo.
+"Carregar mais"; depois da revisão do cadastro por paleta, montar `C, G, Am` por
+cliques devolveu 201 e 28 músicas, repetir os mesmos acordes devolveu 200, o
+catálogo não duplicou, remover/limpar a seleção funcionou e o 33º clique foi
+bloqueado com o aviso de limite de 32. `#/poracordes` foi reconferido: 7 grupos, 36
+acordes, mesmas cores e alternância (toggle) inalterada.
 
 ## Teste de regressão obrigatório
 
@@ -110,9 +112,9 @@ antes de importar `main`, então não toca em `var/deciframe.db`.
   persistência foi validada no nível de processo (reinício do gunicorn), não de
   container.
 - **Frontend:** não há infraestrutura de teste JS no projeto (sem Karma/Jasmine nem
-  build step). Catálogo dinâmico, formulário, duplicata e "carregar mais" foram
-  verificados manualmente no browser, por `node --check` e pela API que os alimenta,
-  mas não por teste automatizado de browser.
+  build step). Catálogo dinâmico, cadastro por cliques na paleta, duplicata e
+  "carregar mais" foram verificados manualmente no browser, por `node --check` e pela
+  API que os alimenta, mas não por teste automatizado de browser.
 - **Concorrência:** o gunicorn roda com 1 worker, então não há teste de escrita
   concorrente. O SQLite usa `timeout=5`, mas múltiplos workers não fazem parte do
   deploy atual.

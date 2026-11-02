@@ -163,6 +163,20 @@ a:active {
   margin: auto;
   clear: both;
 }
+/* Catálogo de sequências salvas com rolagem própria, para a paleta
+   continuar alcançável perto do teto de 500 sequências. */
+.sequencias-lista {
+  max-height: 50vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 5px;
+}
+.sequencia-contador {
+  margin-bottom: 10px;
+}
+.sequencia-selecionada {
+  margin-top: 10px;
+}
 /* Acorde directive*/
 .acorde-wrapper {
   float: left;
